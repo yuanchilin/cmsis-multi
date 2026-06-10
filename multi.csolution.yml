@@ -16,4 +16,4 @@ solution:
       optimize: balanced
       debug: off
   projects:
-    - project: ./my_project.cproject.yml
+    - project: ./multi.cproject.yml

@@ -1,14 +1,14 @@
-# CMSIS-BootBox
+# CMSIS-Multi
 
-基于 **CMSIS-Build** 的 ARM Cortex-M3 裸机示例项目。
+基于 **CMSIS-Build** 的 ARM Cortex-M3 裸机示例项目，支持多编译器（GCC、Clang、ARMCC、IAR、GHS 等）。
 
 ## 项目结构
 
 ```
-cmsis-bootbox/
+cmsis-multi/
 ├── main.c                        # 主程序
-├── my_solution.csolution.yml     # 解决方案配置
-├── my_project.cproject.yml       # 项目配置
+├── multi.csolution.yml           # 解决方案配置
+├── multi.cproject.yml            # 项目配置
 ├── build.ps1                     # PowerShell 编译脚本
 ├── RTE/
 │   ├── RTE_Components.h          # RTE 组件配置
@@ -18,12 +18,12 @@ cmsis-bootbox/
 │           ├── gcc_linker_script.ld.src  # GCC 链接脚本模板
 │           └── regions_ARMCM3.h  # 内存区域定义
 ├── out/                          # 编译产物目录
-│   └── my_project/
+│   └── multi/
 │       └── MyBoard/
 │           ├── Debug/
-│           │   └── my_project.elf
+│           │   └── multi.elf
 │           └── Release/
-│               └── my_project.elf
+│               └── multi.elf
 └── tmp/                          # 临时构建文件
 ```
 
@@ -96,13 +96,13 @@ export CMSIS_PACK_ROOT=/home/yuan/.cache/arm/packs
 export GCC_TOOLCHAIN_13_2_1=/usr/bin
 
 # 编译 Debug + Release
-cbuild my_solution.csolution.yml
+cbuild multi.csolution.yml
 
 # 仅编译 Debug
-cbuild my_solution.csolution.yml --context-set -c "my_project.Debug+MyBoard"
+cbuild multi.csolution.yml --context-set -c "multi.Debug+MyBoard"
 
 # 仅编译 Release
-cbuild my_solution.csolution.yml --context-set -c "my_project.Release+MyBoard"
+cbuild multi.csolution.yml --context-set -c "multi.Release+MyBoard"
 ```
 
 ## 编译产物
@@ -111,13 +111,13 @@ cbuild my_solution.csolution.yml --context-set -c "my_project.Release+MyBoard"
 
 | 构建类型 | 输出文件 | 典型大小 |
 |---------|---------|---------|
-| **Debug** | `out/my_project/MyBoard/Debug/my_project.elf` | ~173 KB |
-| **Release** | `out/my_project/MyBoard/Release/my_project.elf` | ~99 KB |
+| **Debug** | `out/multi/MyBoard/Debug/multi.elf` | ~173 KB |
+| **Release** | `out/multi/MyBoard/Release/multi.elf` | ~99 KB |
 
 查看各段大小：
 
 ```bash
-arm-none-eabi-size out/my_project/MyBoard/Debug/my_project.elf
+arm-none-eabi-size out/multi/MyBoard/Debug/multi.elf
 ```
 
 ## 配置说明
@@ -147,10 +147,10 @@ arm-none-eabi-size out/my_project/MyBoard/Debug/my_project.elf
 ### `main.c`
 主程序入口，包含一个简单的无限循环。
 
-### `my_solution.csolution.yml`
+### `multi.csolution.yml`
 解决方案级配置文件，定义目标设备、构建类型、pack 依赖和项目引用。
 
-### `my_project.cproject.yml`
+### `multi.cproject.yml`
 项目级配置文件，定义源文件分组和组件依赖。
 
 ### `RTE/RTE_Components.h`

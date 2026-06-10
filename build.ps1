@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    CMSIS-Build 编译脚本 - cmsis-bootbox
+    CMSIS-Build 编译脚本 - cmsis-multi
 .DESCRIPTION
     使用 cbuild 编译 CMSIS 项目，支持 Debug/Release 构建类型
 .PARAMETER Type
@@ -30,7 +30,7 @@ param(
 # 配置
 # ============================================================================
 $ProjectDir = $PSScriptRoot
-$SolutionFile = Join-Path $ProjectDir 'my_solution.csolution.yml'
+$SolutionFile = Join-Path $ProjectDir 'multi.csolution.yml'
 
 # CMSIS Pack 根目录
 $Env:CMSIS_PACK_ROOT = '/home/yuan/.cache/arm/packs'
@@ -127,10 +127,10 @@ function Invoke-Clean {
     )
 
     $cleanFiles = @(
-        'my_solution.cbuild-pack.yml',
-        'my_project.Debug+MyBoard.cbuild.yml',
-        'my_project.Release+MyBoard.cbuild.yml',
-        'my_solution.cbuild-idx.yml'
+        'multi.cbuild-pack.yml',
+        'multi.Debug+MyBoard.cbuild.yml',
+        'multi.Release+MyBoard.cbuild.yml',
+        'multi.cbuild-idx.yml'
     )
 
     foreach ($dir in $cleanDirs) {
@@ -180,7 +180,7 @@ function Invoke-Build {
             $process = Start-Process -NoNewWindow -PassThru -FilePath $Cbuild -ArgumentList @(
                 $SolutionFile,
                 '--context-set',
-                '-c', "my_project.$BuildType+MyBoard"
+                '-c', "multi.$BuildType+MyBoard"
             ) -RedirectStandardOutput "$ProjectDir/build.log" -RedirectStandardError "$ProjectDir/build.err.log"
             $process.WaitForExit()
             $exitCode = $process.ExitCode
@@ -239,7 +239,7 @@ function Show-Results {
 # 主流程
 # ============================================================================
 function Main {
-    Write-Header 'CMSIS-BootBox 编译脚本'
+    Write-Header 'CMSIS-Multi 编译脚本'
 
     $startTime = Get-Date
 

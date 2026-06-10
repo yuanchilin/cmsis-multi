@@ -1,0 +1,52 @@
+# 自动检测文本文件并统一 LF
+* text=auto
+
+# 以下文件强制使用 LF（Linux/macOS 风格）
+*.c text eol=lf
+*.h text eol=lf
+*.cpp text eol=lf
+*.hpp text eol=lf
+*.s text eol=lf
+*.S text eol=lf
+*.ld text eol=lf
+*.py text eol=lf
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.cmake text eol=lf
+Makefile text eol=lf
+makefile text eol=lf
+*.cfg text eol=lf
+*.ini text eol=lf
+
+# 二进制文件标记（防止 git 尝试做文本标准化）
+*.o binary
+*.d binary
+*.hex binary
+*.bin binary
+*.elf binary
+*.map binary
+*.lst binary
+*.size binary
+*.srec binary
+*.mot binary
+*.out binary
+*.axf binary
+*.obj binary
+*.lib binary
+*.a binary
+*.so binary
+*.dll binary
+*.exe binary
+# *.png binary
+# *.jpg binary
+# *.ico binary
+# *.pdf binary
+
+# Windows 批处理/PowerShell 脚本（保留 CRLF）
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
