@@ -1,0 +1,19 @@
+solution:
+  compiler: GCC
+  packs:
+    - pack: ARM::CMSIS
+    - pack: ARM::Cortex_DFP
+  target-types:
+    - type: MyBoard
+      device: ARMCM3
+  build-types:
+    - type: Debug
+      compiler: GCC
+      optimize: none
+      debug: on
+    - type: Release
+      compiler: GCC
+      optimize: balanced
+      debug: off
+  projects:
+    - project: ./my_project.cproject.yml

@@ -1,0 +1,41 @@
+# Build output
+*.o
+*.d
+*.hex
+*.bin
+*.elf
+*.map
+*.lst
+*.size
+*.srec
+*.mot
+*.out
+*.axf
+
+# Build directories
+build/
+Debug/
+Release/
+tmp/
+RTE/_Debug_MyBoard/
+RTE/_Release_MyBoard/
+
+# Logs
+*.log
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# cbuild output files
+*.cbuild.yml
+*.cbuild-idx.yml
+*.cbuild-pack.yml
+*.cbuild-set.yml

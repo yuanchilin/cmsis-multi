@@ -1,0 +1,11 @@
+project:
+  groups:
+    - group: src
+      files:
+        - file: main.c
+    - group: syscalls
+      files:
+        - file: RTE/Device/ARMCM3/syscalls.c
+  components:
+    - component: ARM::CMSIS:CORE
+    - component: ARM::Device:Startup
