@@ -5,7 +5,7 @@ project:
         - file: main.c
     - group: syscalls
       files:
-        - file: RTE/Device/ARMCM3/syscalls.c
+        - file: src/syscalls.c
   components:
     - component: ARM::CMSIS:CORE
     - component: ARM::Device:Startup

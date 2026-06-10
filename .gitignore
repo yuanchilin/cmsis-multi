@@ -17,8 +17,7 @@ build/
 Debug/
 Release/
 tmp/
-RTE/_Debug_MyBoard/
-RTE/_Release_MyBoard/
+RTE/_*_MyBoard/
 
 # Logs
 *.log

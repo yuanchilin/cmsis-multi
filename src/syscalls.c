@@ -1,7 +1,11 @@
 /*
  * Minimal syscall stubs for ARM Cortex-M3 bare-metal
- * Provides stubs for newlib syscalls to avoid linker errors
+ * Provides stubs for newlib syscalls to avoid linker errors.
+ *
+ * picolibc (Clang/LLVM) provides its own syscall stubs,
+ * so these are only needed for newlib (GCC).
  */
+#if !defined(__clang__)
 #include <sys/stat.h>
 
 void _exit(int status) {
@@ -40,3 +44,4 @@ caddr_t _sbrk(int incr) {
 int _write(int file, char *ptr, int len) {
     return len;
 }
+#endif

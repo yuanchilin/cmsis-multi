@@ -1,5 +1,4 @@
 solution:
-  compiler: GCC
   packs:
     - pack: ARM::CMSIS
     - pack: ARM::Cortex_DFP
@@ -13,6 +12,14 @@ solution:
       debug: on
     - type: Release
       compiler: GCC
+      optimize: balanced
+      debug: off
+    - type: Debug-LLVM
+      compiler: CLANG
+      optimize: none
+      debug: on
+    - type: Release-LLVM
+      compiler: CLANG
       optimize: balanced
       debug: off
   projects:

@@ -19,7 +19,7 @@
 #>
 
 param(
-    [ValidateSet('Debug', 'Release', 'All')]
+    [ValidateSet('Debug', 'Release', 'Debug-LLVM', 'Release-LLVM', 'All')]
     [string]$Type = 'All',
 
     [switch]$Clean,
@@ -37,6 +37,10 @@ $Env:CMSIS_PACK_ROOT = '/home/yuan/.cache/arm/packs'
 
 # ARM GCC 工具链版本和路径
 $Env:GCC_TOOLCHAIN_13_2_1 = '/usr/bin'
+
+# LLVM/Clang 工具链版本和路径 (CMSIS-Toolbox 使用 CLANG_TOOLCHAIN 环境变量)
+# 使用 clang-wrapper.sh 来修正 CMSIS-Build 与 LLVM-ET-Arm 19.x picolibc 的 multilib 兼容性问题
+$Env:CLANG_TOOLCHAIN_19_1_5 = '/home/yuan/Agent/cmsis-multi/tools/clang-bin'
 
 # cbuild 路径
 $Cbuild = 'cbuild'
@@ -74,6 +78,8 @@ function Write-Info {
 function Test-Prerequisites {
     Write-Header '检查依赖工具'
 
+    $allFound = $true
+
     $tools = @(
         @{ Name = 'cbuild'; Command = 'cbuild' },
         @{ Name = 'cpackget'; Command = 'cpackget' },
@@ -82,7 +88,15 @@ function Test-Prerequisites {
         @{ Name = 'ninja'; Command = 'ninja' }
     )
 
-    $allFound = $true
+    # 检查 LLVM/Clang 工具链
+    $llvmClang = Join-Path $Env:CLANG_TOOLCHAIN_19_1_5 'clang'
+    if (Test-Path $llvmClang) {
+        Write-Success "LLVM/Clang → $llvmClang"
+    }
+    else {
+        Write-ErrorMsg "LLVM/Clang 未找到，位于 $Env:CLANG_TOOLCHAIN_19_1_5"
+        $allFound = $false
+    }
     foreach ($tool in $tools) {
         $path = (Get-Command $tool.Command -ErrorAction SilentlyContinue).Source
         if ($path) {
@@ -123,13 +137,16 @@ function Invoke-Clean {
 
     $cleanDirs = @(
         'tmp',
-        'out'
+        'out',
+        'RTE'
     )
 
     $cleanFiles = @(
         'multi.cbuild-pack.yml',
         'multi.Debug+MyBoard.cbuild.yml',
         'multi.Release+MyBoard.cbuild.yml',
+        'multi.Debug-LLVM+MyBoard.cbuild.yml',
+        'multi.Release-LLVM+MyBoard.cbuild.yml',
         'multi.cbuild-idx.yml'
     )
 
@@ -157,7 +174,7 @@ function Invoke-Build {
     param([string]$BuildType)
 
     if ($BuildType -eq 'All') {
-        Write-Header '编译 Debug + Release'
+        Write-Header '编译全部 (GCC + LLVM)'
     }
     else {
         Write-Header "编译 $BuildType"
@@ -167,6 +184,23 @@ function Invoke-Build {
     Push-Location $ProjectDir
 
     try {
+        # 先生成 RTE 配置文件
+        Write-Info '生成 RTE 配置文件...'
+        $contexts = if ($BuildType -eq 'All') {
+            @('multi.Debug+MyBoard', 'multi.Release+MyBoard', 'multi.Debug-LLVM+MyBoard', 'multi.Release-LLVM+MyBoard')
+        } else {
+            @("multi.$BuildType+MyBoard")
+        }
+        foreach ($ctx in $contexts) {
+            & csolution update-rte $SolutionFile -c $ctx 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                Write-ErrorMsg "RTE 文件生成失败: $ctx"
+                Pop-Location
+                exit $LASTEXITCODE
+            }
+        }
+        Write-Success 'RTE 配置文件已生成'
+
         if ($BuildType -eq 'All') {
             # 全量编译
             $process = Start-Process -NoNewWindow -PassThru -FilePath $Cbuild -ArgumentList @(
@@ -222,7 +256,15 @@ function Show-Results {
     foreach ($elf in $elfFiles) {
         $size = "{0:N0}" -f ((Get-Item $elf).Length / 1KB)
         $path = $elf.FullName.Replace($ProjectDir + '/', '')
-        $type = if ($path -match 'Debug') { 'Debug' } else { 'Release' }
+        if ($path -match 'Debug-LLVM') {
+            $type = 'Debug-LLVM'
+        } elseif ($path -match 'Release-LLVM') {
+            $type = 'Release-LLVM'
+        } elseif ($path -match 'Debug') {
+            $type = 'Debug'
+        } else {
+            $type = 'Release'
+        }
 
         Write-Host "  [${type}] $path  ($size KB)" -ForegroundColor Green
     }
