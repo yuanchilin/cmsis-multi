@@ -14,10 +14,11 @@
 
 # Build directories
 build/
+out/
 Debug/
 Release/
 tmp/
-RTE/_*_MyBoard/
+RTE/
 
 # Logs
 *.log

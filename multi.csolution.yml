@@ -3,7 +3,7 @@ solution:
     - pack: ARM::CMSIS
     - pack: ARM::Cortex_DFP
   target-types:
-    - type: MyBoard
+    - type: Board
       device: ARMCM3
   build-types:
     - type: Debug

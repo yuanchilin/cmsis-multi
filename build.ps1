@@ -1,322 +1,59 @@
 #!/usr/bin/env pwsh
-<#
-.SYNOPSIS
-    CMSIS-Build 编译脚本 - cmsis-multi
-.DESCRIPTION
-    使用 cbuild 编译 CMSIS 项目，支持 Debug/Release 构建类型
-.PARAMETER Type
-    构建类型: Debug, Release, All (默认: All)
-.PARAMETER Clean
-    是否清理之前的构建产物
-.PARAMETER Rebuild
-    是否重新构建 (Clean + Build)
-.EXAMPLE
-    .\build.ps1                   # 编译 Debug + Release
-    .\build.ps1 -Type Debug       # 仅编译 Debug
-    .\build.ps1 -Type Release     # 仅编译 Release
-    .\build.ps1 -Rebuild          # 清理并重新编译
-    .\build.ps1 -Clean            # 仅清理构建产物
-#>
-
 param(
-    [ValidateSet('Debug', 'Release', 'Debug-LLVM', 'Release-LLVM', 'All')]
-    [string]$Type = 'All',
-
+    [ValidateSet('gcc', 'llvm', 'all')][string]$Type = 'all',
     [switch]$Clean,
     [switch]$Rebuild
 )
 
-# ============================================================================
-# 配置
-# ============================================================================
-$ProjectDir = $PSScriptRoot
-$SolutionFile = Join-Path $ProjectDir 'multi.csolution.yml'
+$root = $PSScriptRoot
+$sol  = Join-Path $root 'multi.csolution.yml'
 
-# CMSIS Pack 根目录
-$Env:CMSIS_PACK_ROOT = '/home/yuan/.cache/arm/packs'
-
-# ARM GCC 工具链版本和路径
-$Env:GCC_TOOLCHAIN_13_2_1 = '/usr/bin'
-
-# LLVM/Clang 工具链版本和路径 (CMSIS-Toolbox 使用 CLANG_TOOLCHAIN 环境变量)
-# 使用 clang-wrapper.sh 来修正 CMSIS-Build 与 LLVM-ET-Arm 19.x picolibc 的 multilib 兼容性问题
-$Env:CLANG_TOOLCHAIN_19_1_5 = '/home/yuan/Agent/cmsis-multi/tools/clang-bin'
-
-# cbuild 路径
-$Cbuild = 'cbuild'
-$Cpackget = 'cpackget'
-
-# ============================================================================
-# 辅助函数
-# ============================================================================
-function Write-Header {
-    param([string]$Message)
-    $line = '=' * 60
-    Write-Host "`n$line" -ForegroundColor Cyan
-    Write-Host "  $Message" -ForegroundColor Cyan
-    Write-Host "$line`n" -ForegroundColor Cyan
-}
-
-function Write-Success {
-    param([string]$Message)
-    Write-Host "[✓] $Message" -ForegroundColor Green
-}
-
-function Write-ErrorMsg {
-    param([string]$Message)
-    Write-Host "[✗] $Message" -ForegroundColor Red
-}
-
-function Write-Info {
-    param([string]$Message)
-    Write-Host "[i] $Message" -ForegroundColor Yellow
-}
-
-# ============================================================================
-# 检查依赖
-# ============================================================================
-function Test-Prerequisites {
-    Write-Header '检查依赖工具'
-
-    $allFound = $true
-
-    $tools = @(
-        @{ Name = 'cbuild'; Command = 'cbuild' },
-        @{ Name = 'cpackget'; Command = 'cpackget' },
-        @{ Name = 'arm-none-eabi-gcc'; Command = 'arm-none-eabi-gcc' },
-        @{ Name = 'cmake'; Command = 'cmake' },
-        @{ Name = 'ninja'; Command = 'ninja' }
-    )
-
-    # 检查 LLVM/Clang 工具链
-    $llvmClang = Join-Path $Env:CLANG_TOOLCHAIN_19_1_5 'clang'
-    if (Test-Path $llvmClang) {
-        Write-Success "LLVM/Clang → $llvmClang"
-    }
-    else {
-        Write-ErrorMsg "LLVM/Clang 未找到，位于 $Env:CLANG_TOOLCHAIN_19_1_5"
-        $allFound = $false
-    }
-    foreach ($tool in $tools) {
-        $path = (Get-Command $tool.Command -ErrorAction SilentlyContinue).Source
-        if ($path) {
-            # 获取版本信息
-            $version = & $tool.Command --version 2>&1 | Select-Object -First 1
-            Write-Success "$($tool.Name) → $path $($version -replace '.*(\d+\.\d+\.\d+).*', '$1')"
-        }
-        else {
-            Write-ErrorMsg "$($tool.Name) 未找到，请先安装"
-            $allFound = $false
-        }
-    }
-
-    if (-not $allFound) {
-        Write-ErrorMsg '缺少必要工具，请安装 CMSIS-Toolbox 和 ARM GCC'
-        exit 1
-    }
-
-    # 检查 CMSIS Pack 是否已安装
-    $packRoot = $Env:CMSIS_PACK_ROOT
-    if (Test-Path (Join-Path $packRoot 'ARM/Cortex_DFP')) {
-        Write-Success "CMSIS Pack 已安装 ($packRoot)"
-    }
-    else {
-        Write-Info 'CMSIS Pack 未安装，尝试自动安装...'
-        & $Cpackget init 'https://www.keil.com/pack/index.pidx' --pack-root $packRoot
-        & $Cpackget add 'ARM::CMSIS' --pack-root $packRoot
-        & $Cpackget add 'ARM::Cortex_DFP' --pack-root $packRoot
-        Write-Success 'CMSIS Pack 安装完成'
-    }
-}
-
-# ============================================================================
 # 清理
-# ============================================================================
-function Invoke-Clean {
-    Write-Header '清理构建产物'
-
-    $cleanDirs = @(
-        'tmp',
-        'out',
-        'RTE'
-    )
-
-    $cleanFiles = @(
-        'multi.cbuild-pack.yml',
-        'multi.Debug+MyBoard.cbuild.yml',
-        'multi.Release+MyBoard.cbuild.yml',
-        'multi.Debug-LLVM+MyBoard.cbuild.yml',
-        'multi.Release-LLVM+MyBoard.cbuild.yml',
-        'multi.cbuild-idx.yml'
-    )
-
-    foreach ($dir in $cleanDirs) {
-        $path = Join-Path $ProjectDir $dir
-        if (Test-Path $path) {
-            Remove-Item -Path $path -Recurse -Force
-            Write-Success "已删除: $path"
-        }
-    }
-
-    foreach ($file in $cleanFiles) {
-        $path = Join-Path $ProjectDir $file
-        if (Test-Path $path) {
-            Remove-Item -Path $path -Force
-            Write-Success "已删除: $path"
-        }
-    }
+if ($Clean -or $Rebuild) {
+    Write-Host '[Clean]' -ForegroundColor Cyan
+    Remove-Item -Recurse -Force "$root/tmp", "$root/out", "$root/RTE" -ErrorAction SilentlyContinue
+    Remove-Item -Force "$root/multi.cbuild-pack.yml", "$root/multi.cbuild-idx.yml" -ErrorAction SilentlyContinue
+    Remove-Item -Force "$root/multi.Debug+Board.cbuild.yml", "$root/multi.Release+Board.cbuild.yml" -ErrorAction SilentlyContinue
+    Remove-Item -Force "$root/multi.Debug-LLVM+Board.cbuild.yml", "$root/multi.Release-LLVM+Board.cbuild.yml" -ErrorAction SilentlyContinue
+    Write-Host '  done' -ForegroundColor Green
+    if ($Clean -and -not $Rebuild) { return }
 }
 
-# ============================================================================
-# 构
-# ============================================================================
-function Invoke-Build {
-    param([string]$BuildType)
+# 环境变量
+$Env:CMSIS_PACK_ROOT          = '/home/yuan/.cache/arm/packs'
+$Env:GCC_TOOLCHAIN_13_2_1     = '/usr/bin'
+$Env:CLANG_TOOLCHAIN_19_1_5   = '/home/yuan/local/LLVM-ET-Arm-19.1.5-Linux-x86_64/bin'
 
-    if ($BuildType -eq 'All') {
-        Write-Header '编译全部 (GCC + LLVM)'
-    }
-    else {
-        Write-Header "编译 $BuildType"
-    }
+# 构建列表
+$builds = @(
+    @{ name='Debug';        ctx='multi.Debug+Board';        compiler='gcc' }
+    @{ name='Release';      ctx='multi.Release+Board';      compiler='gcc' }
+    @{ name='Debug-LLVM';   ctx='multi.Debug-LLVM+Board';   compiler='llvm' }
+    @{ name='Release-LLVM'; ctx='multi.Release-LLVM+Board'; compiler='llvm' }
+)
+if ($Type -ne 'all') { $builds = $builds | Where-Object { $_.compiler -eq $Type } }
 
-    # 切换到项目目录
-    Push-Location $ProjectDir
+$exit = 0
+foreach ($b in $builds) {
+    Write-Host "[$($b.name)] update-rte ..." -ForegroundColor Yellow
+    & csolution update-rte $sol -c $b.ctx
+    if ($LASTEXITCODE -ne 0) { Write-Host "  RTE failed" -ForegroundColor Red; exit 1 }
 
-    try {
-        # 先生成 RTE 配置文件
-        Write-Info '生成 RTE 配置文件...'
-        $contexts = if ($BuildType -eq 'All') {
-            @('multi.Debug+MyBoard', 'multi.Release+MyBoard', 'multi.Debug-LLVM+MyBoard', 'multi.Release-LLVM+MyBoard')
-        } else {
-            @("multi.$BuildType+MyBoard")
-        }
-        foreach ($ctx in $contexts) {
-            & csolution update-rte $SolutionFile -c $ctx 2>&1 | Out-Null
-            if ($LASTEXITCODE -ne 0) {
-                Write-ErrorMsg "RTE 文件生成失败: $ctx"
-                Pop-Location
-                exit $LASTEXITCODE
-            }
-        }
-        Write-Success 'RTE 配置文件已生成'
+    Write-Host "`n==> $($b.name) ..." -ForegroundColor Cyan
+    if ($b.compiler -eq 'llvm') { $Env:CMSIS_COMPILER_ROOT = Join-Path $root 'tools' }
+    else { Remove-Item Env:CMSIS_COMPILER_ROOT -ErrorAction SilentlyContinue }
 
-        if ($BuildType -eq 'All') {
-            # 全量编译
-            $process = Start-Process -NoNewWindow -PassThru -FilePath $Cbuild -ArgumentList @(
-                $SolutionFile
-            ) -RedirectStandardOutput "$ProjectDir/build.log" -RedirectStandardError "$ProjectDir/build.err.log"
-            $process.WaitForExit()
-            $exitCode = $process.ExitCode
-        }
-        else {
-            # 指定构建类型
-            $process = Start-Process -NoNewWindow -PassThru -FilePath $Cbuild -ArgumentList @(
-                $SolutionFile,
-                '--context-set',
-                '-c', "multi.$BuildType+MyBoard"
-            ) -RedirectStandardOutput "$ProjectDir/build.log" -RedirectStandardError "$ProjectDir/build.err.log"
-            $process.WaitForExit()
-            $exitCode = $process.ExitCode
-        }
-
-        # 显示构建日志
-        if (Test-Path "$ProjectDir/build.log") {
-            $log = Get-Content "$ProjectDir/build.log" -Raw
-            if ($log.Trim()) {
-                Write-Host $log
-            }
-        }
-
-        return $exitCode
-    }
-    finally {
-        Pop-Location
-    }
+    & cbuild $sol -c $b.ctx
+    if ($LASTEXITCODE -ne 0) { $exit = $LASTEXITCODE; Write-Host "  FAILED ($($b.name))" -ForegroundColor Red; break }
 }
 
-# ============================================================================
-# 显示结果
-# ============================================================================
-function Show-Results {
-    Write-Header '编译结果'
-
-    $outDir = Join-Path $ProjectDir 'out'
-    if (-not (Test-Path $outDir)) {
-        Write-Info '未找到输出目录'
-        return
+if ($exit -eq 0) {
+    Get-ChildItem -Recurse "$root/out/*.elf" | ForEach-Object {
+        $sz = '{0:N0} KB' -f ($_.Length / 1KB)
+        Write-Host "  [OK] $($_.FullName.Replace("$root/",'')) ($sz)" -ForegroundColor Green
     }
-
-    $elfFiles = Get-ChildItem -Path $outDir -Recurse -Filter '*.elf'
-    if ($elfFiles.Count -eq 0) {
-        Write-ErrorMsg '未找到 ELF 文件，编译可能失败'
-        return
-    }
-
-    foreach ($elf in $elfFiles) {
-        $size = "{0:N0}" -f ((Get-Item $elf).Length / 1KB)
-        $path = $elf.FullName.Replace($ProjectDir + '/', '')
-        if ($path -match 'Debug-LLVM') {
-            $type = 'Debug-LLVM'
-        } elseif ($path -match 'Release-LLVM') {
-            $type = 'Release-LLVM'
-        } elseif ($path -match 'Debug') {
-            $type = 'Debug'
-        } else {
-            $type = 'Release'
-        }
-
-        Write-Host "  [${type}] $path  ($size KB)" -ForegroundColor Green
-    }
-
-    # 使用 arm-none-eabi-size 显示详细信息
-    Write-Host ''
-    Write-Info '各段大小 (arm-none-eabi-size):'
-    foreach ($elf in $elfFiles) {
-        & arm-none-eabi-size $elf.FullName 2>$null
-    }
+    Write-Host "`nAll done!" -ForegroundColor Green
+} else {
+    Write-Host "`nBuild failed!" -ForegroundColor Red
 }
-
-# ============================================================================
-# 主流程
-# ============================================================================
-function Main {
-    Write-Header 'CMSIS-Multi 编译脚本'
-
-    $startTime = Get-Date
-
-    # 1. 检查依赖
-    Test-Prerequisites
-
-    # 2. 清理
-    if ($Clean -or $Rebuild) {
-        Invoke-Clean
-        if ($Clean -and (-not $Rebuild)) {
-            Write-Success '清理完成'
-            return
-        }
-    }
-
-    # 3. 编译
-    $exitCode = Invoke-Build -BuildType $Type
-
-    # 4. 结果
-    $elapsed = (Get-Date) - $startTime
-    $elapsedStr = '{0:mm}:{0:ss}' -f ([DateTime]$elapsed.Ticks)
-
-    Write-Header '编译摘要'
-    if ($exitCode -eq 0) {
-        Write-Success "编译成功! (耗时: $elapsedStr)"
-        Show-Results
-    }
-    else {
-        Write-ErrorMsg "编译失败! (退出码: $exitCode, 耗时: $elapsedStr)"
-        Write-Info '查看详细日志:'
-        Write-Info "  Get-Content build.log"
-        Write-Info "  Get-Content build.err.log"
-        exit $exitCode
-    }
-}
-
-# 执行
-Main
+exit $exit
